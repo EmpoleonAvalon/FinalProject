@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Wandering Wizard</title>
+		<script src="src/phaser.js"></script>
+	</head>
+	<body>
+		<script>
+			var config = {
+				type: Phaser.AUTO,
+				width: 800,
+				height: 600,
+				physics: {
+					default: 'arcade',
+					arcade: {
+						gravity: {y:500},
+						debug: false
+					}
+				},
+				scene: {
+					preload: preload,
+					create: create,
+					update: update
+				}
+			}
+
+			var game = new Phaser.Game(config);
+
+			var map
+			var groundLayer, leafLayer, skyLayer, backLayer;
+			var wizard
+			var skeletons = []
+			var skeletonsco = [[1165,6350,1284,'right'],[1756, 5185,1950,'right'],[540,4801,797,'right'],[2777, 5185,2960,'right'],[2400, 5249,2500,'right']]
+			var brambles = []
+			var bramblesco = [[3858,5313],[4321, 5313],[4902, 5217],[5284, 5153],[3519, 5281]]
+			var spell = [[3,1,1],[2,1,1],[3,1,2],[3,2,2],[1,1,3],[2,1,2],[3,2,1],[1,2,1],[1,2,2],[3,2,3],0]
+			var htext;
+			var mtext;
+			var clicked = false;
+			var fireballOut = false
+			var release = true
+			var magicScreen = false
+			var back
+			var wall = false
+
+			function preload(){
+
+				this.load.tilemapTiledJSON('map', 'assets/map.json');
+
+				this.load.spritesheet('tiles','assets/tiles.png', {frameWidth: 32, frameHeight: 32});
+
+				this.load.atlas('wizard', 'assets/spritesheet.png', 'assets/spritesheet.json');
+
+				this.load.atlas('fireball', 'assets/fireball.png', 'assets/fireball.json');
+
+				this.load.image('bolt','assets/bolt.png');
+
+				this.load.atlas('skeleton', 'assets/skeleton.png', 'assets/skeleton.json');
+
+				this.load.atlas('bramble','assets/brambleshooter.png','assets/brambleshooter.json')
+
+				this.load.image('black','assets/blackScreen.png')
+
+				this.load.image('num1','assets/num1.png')
+
+				this.load.image('num2','assets/num2.png')
+
+				this.load.image('num3','assets/num3.png')
+
+				this.load.image('num4','assets/num4.png')
+
+				this.load.image('num5','assets/num5.png')
+
+				this.load.image('num6','assets/num6.png')
+
+				this.load.image('num7','assets/num7.png')
+
+				this.load.image('num8','assets/num8.png')
+
+				this.load.image('num9','assets/num9.png')
+
+				this.load.image('num10','assets/num10.png')
+
+				this.load.image('hand','assets/hand.png')
+
+				this.load.image('wiz','assets/wizard.png')
+
+				this.load.image('single','assets/single.png')
+
+				this.load.image('fire','assets/fire.png')
+
+				this.load.image('damage','assets/damage.png')
+
+				this.load.image('flame','assets/flame.png')
+
+				this.load.image('health','assets/health.png')
+
+				this.load.image('orb','assets/orb.png')
+
+				this.load.image('thorn','assets/thorn.png')
+
+				this.load.image('gem','assets/gem.png')
+
+				this.load.image('treeboss','assets/Treeboss.png')
+
+				this.load.audio('exploring',['audio/song1.wav']);
+                this.load.audio('incantation',['audio/Incantation.wav']);
+                this.load.audio('fireball',['audio/fireball.mp3']);
+                this.load.audio('damage',['audio/damage.wav']);
+                this.load.audio('spell',['audio/spell.wav']);
+               	this.load.audio('bossFight',['audio/bossFight.wav']);
+               	this.load.audio('swoosh',["audio/swoosh.wav"])
+               	this.load.audio('boom',["audio/explosion.wav"])
+               //	this.load.audio('wow',['audio/wow.mp3'])
+
+			}
+
+			function create(){
+
+				map = this.make.tilemap({key: 'map'});
+
+				var groundTiles = map.addTilesetImage('tiles');
+
+				skyLayer = map.createDynamicLayer('Sky', groundTiles, 0, 0);
+
+				wallLayer = map.createDynamicLayer('Wall', groundTiles, 0, 0);
+
+				backLayer = map.createDynamicLayer('Background', groundTiles, 0, 0);
+
+				leafLayer = map.createDynamicLayer('Leaves', groundTiles, 0, 0);
+
+				groundLayer = map.createDynamicLayer('World', groundTiles, 0, 0);
+
+				groundLayer.setCollisionByExclusion([-1]);
+
+				this.physics.world.bounds.width 	= groundLayer.width;
+				this.physics.world.bounds.height 	= groundLayer.height;
+
+				music = this.sound.add('exploring');
+				incantation = this.sound.add('incantation');
+				fireball = this.sound.add('fireball');
+				damage = this.sound.add('damage');
+				spellSound = this.sound.add('spell');
+				bossFight = this.sound.add('bossFight');
+				swoosh = this.sound.add('swoosh')
+				explosion = this.sound.add('boom')
+				//wow = this.sound.add('wow')
+
+				soundManager(music,true);
+
+				wizard = this.physics.add.sprite(123, 6337, 'wizard');
+				wizard.setCollideWorldBounds(true);
+				wizard.health =  100
+				wizard.mana = 100
+				wizard.maxHealth = 100
+				wizard.maxMana = 100
+				wizard.attacking = 0
+				wizard.inv = 0
+				wizard.dead = false
+
+				hitbox = this.physics.add.sprite(0,0)
+				hitbox.body.width=40
+				hitbox.body.height=58
+				hitbox.body.allowGravity=false
+
+				orb = this.physics.add.sprite(240,4750, 'orb').setScale(1/8);
+				orb.body.allowGravity=false
+
+				gem = this.physics.add.sprite(7915, 5100, 'gem').setScale(1/8);
+				gem.body.allowGravity=false
+
+
+				for(i=0;i<skeletonsco.length;i++){
+					skeletons[i] = this.physics.add.sprite(skeletonsco[i][0],skeletonsco[i][1], 'skeleton');
+					skeletons[i].setCollideWorldBounds(true);
+					skeletons[i].health =  50
+					skeletons[i].maxHealth = 50
+					skeletons[i].gone = false
+				}
+				
+				for(i=0;i<bramblesco.length;i++){
+					brambles[i] = this.physics.add.sprite(bramblesco[i][0],bramblesco[i][1], 'bramble').setScale(2);
+					brambles[i].setCollideWorldBounds(true);
+					brambles[i].health =  50
+					brambles[i].maxHealth = 50
+					brambles[i].timer = Math.floor(100*Math.random())+1
+					brambles[i].gone = false
+				}
+
+				tree = this.physics.add.sprite(7400, 5000, 'treeboss')//.setScale(2);
+				tree.setCollideWorldBounds(true);
+				tree.health =  500
+				tree.maxHealth = 500
+				tree.timer = Math.floor(100*Math.random())+1
+				tree.gone = false
+
+				fireballs = this.physics.add.group()
+
+				hitboxtwo = this.physics.add.sprite(-200,0)
+				hitboxtwo.body.width=180
+				hitboxtwo.body.height=180
+				hitboxtwo.body.allowGravity=false
+
+				this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels );
+
+				this.cameras.main.startFollow(wizard);
+
+				number1= this.add.sprite(-400,300,'num1').setInteractive().setScale(.75)
+				number1.on('pointerdown', clickOne);
+				number1.setScrollFactor(0);
+
+				number2= this.add.sprite(-400,300,'num2').setInteractive().setScale(.75)
+				number2.on('pointerdown', clickTwo);
+				number2.setScrollFactor(0);
+
+				number3= this.add.sprite(-400,300,'num3').setInteractive().setScale(.75)
+				number3.on('pointerdown', clickThree);
+				number3.setScrollFactor(0);
+
+				number4= this.add.sprite(-400,300,'num4').setInteractive().setScale(.75)
+				number4.on('pointerdown', clickFour);
+				number4.setScrollFactor(0);
+
+				number5= this.add.sprite(-400,300,'num5').setInteractive().setScale(.75)
+				number5.on('pointerdown', clickFive);
+				number5.setScrollFactor(0);
+
+				number6= this.add.sprite(-400,300,'num6').setInteractive().setScale(.75)
+				number6.on('pointerdown', clickSix);
+				number6.setScrollFactor(0);
+
+				number7= this.add.sprite(-400,300,'num7').setInteractive().setScale(.75)
+				number7.on('pointerdown', clickSeven);
+				number7.setScrollFactor(0);
+
+				number8= this.add.sprite(-400,300,'num8').setInteractive().setScale(.75)
+				number8.on('pointerdown', clickEight);
+				number8.setScrollFactor(0);
+
+				number9= this.add.sprite(-400,300,'num9').setInteractive().setScale(.75)
+				number9.on('pointerdown', clickNine);
+				number9.setScrollFactor(0);
+
+				number10= this.add.sprite(-400,300,'num10').setInteractive().setScale(.75)
+				number10.on('pointerdown', clickTen);
+				number10.setScrollFactor(0);
+
+				boltButton = this.add.sprite(-400,300,'bolt').setInteractive().setScale(2)
+				boltButton.on('pointerdown', clickBolt);
+				boltButton.setScrollFactor(0);
+
+				handButton = this.add.sprite(-400,300,'hand').setInteractive().setScale(1/2)
+				handButton.on('pointerdown', clickHand);
+				handButton.setScrollFactor(0);
+
+				selfButton = this.add.sprite(-400,300,'wiz').setInteractive().setScale(2)
+				selfButton.on('pointerdown', clickSelf);
+				selfButton.setScrollFactor(0);
+
+				singleButton = this.add.sprite(-400,300,'single').setInteractive()
+				singleButton.on('pointerdown', clickSingle);
+				singleButton.setScrollFactor(0);
+
+				aoeButton = this.add.sprite(-400,300,'fire').setInteractive()
+				aoeButton.on('pointerdown', clickAoe);
+				aoeButton.setScrollFactor(0);
+
+				damageButton = this.add.sprite(-400,300,'damage').setInteractive().setScale(1/3)
+				damageButton.on('pointerdown', clickDamage);
+				damageButton.setScrollFactor(0);
+
+				flameButton = this.add.sprite(-400,300,'flame').setInteractive().setScale(1/3)
+				flameButton.on('pointerdown', clickFlame);
+				flameButton.setScrollFactor(0);
+
+				healthButton = this.add.sprite(-400,300,'health').setInteractive().setScale(1/6)
+				healthButton.on('pointerdown', clickHealth);
+				healthButton.setScrollFactor(0);
+
+
+				bolts = this.physics.add.group();
+
+				thorns = this.physics.add.group();
+
+				this.anims.create({
+					key: "left",
+					frames: this.anims.generateFrameNumbers('wizard', {start:20,end:22}),
+					frameRate: 10,
+					repeat: -1
+				});
+
+				this.anims.create({
+					key: "explosion",
+					frames: this.anims.generateFrameNumbers('fireball', {start:1,end:75}),
+					frameRate: 1000,
+					repeat: 0
+				});
+
+				this.anims.create({
+					key: 'idle',
+					frames: [{key: 'wizard', frame: '15'}],
+					frameRate : 10
+				})
+
+				this.anims.create({
+					key: 'jump',
+					frames: [{key: 'wizard', frame: '6'}],
+					frameRate : 10
+				})
+
+				this.anims.create({
+					key: 'attack',
+					frames: [{key: 'wizard', frame: '16'}],
+					frameRate : 10
+				})
+
+				this.anims.create({
+					key: "skeletonWalk",
+					frames: this.anims.generateFrameNumbers('skeleton', {start:11,end:20}),
+					frameRate: 10,
+					repeat: -1
+				});
+
+				this.anims.create({
+					key: "brambleShoot",
+					frames: this.anims.generateFrameNumbers('bramble', {start:11,end:14}),
+					frameRate: 10,
+					repeat: 0
+				});
+
+				htext = this.add.text(20, 570, 'Health: 100', {
+					fontSize : '20px',
+					fill: '#ffffff'
+				});
+
+				mtext = this.add.text(20, 540, 'Mana: 100', {
+					fontSize : '20px',
+					fill: '#ffffff'
+				});
+				htext.setScrollFactor(0);
+				mtext.setScrollFactor(0)
+
+				this.physics.add.collider(groundLayer, wizard);
+				for(i=0;i<skeletonsco.length;i++){
+					this.physics.add.collider(groundLayer, skeletons[i]);
+
+					this.physics.add.overlap(skeletons[i],bolts,boltHit,null,this)
+
+					this.physics.add.overlap(skeletons[i],wizard,touchEnemy,null,this)
+
+					this.physics.add.overlap(skeletons[i],hitbox,touchAttack,null,this)
+
+					this.physics.add.overlap(skeletons[i],hitboxtwo,aoeAttack,null,this)
+				}
+
+				for(i=0;i<bramblesco.length;i++){
+					this.physics.add.collider(groundLayer, brambles[i]);
+
+					this.physics.add.overlap(brambles[i],bolts,boltHit,null,this)
+
+					this.physics.add.overlap(brambles[i],wizard,touchEnemy,null,this)
+
+					this.physics.add.overlap(brambles[i],hitbox,touchAttack,null,this)
+
+					this.physics.add.overlap(brambles[i],hitboxtwo,aoeAttack,null,this)
+
+
+				}
+				this.physics.add.collider(groundLayer, tree);
+
+				this.physics.add.overlap(tree,bolts,boltHit,null,this)
+
+				this.physics.add.overlap(tree,wizard,touchEnemy,null,this)
+
+				this.physics.add.overlap(tree,hitbox,touchAttack,null,this)
+
+				this.physics.add.overlap(tree,hitboxtwo,aoeAttack,null,this)
+
+				this.physics.add.collider(groundLayer,bolts,boltEnd,null,this)
+
+				this.physics.add.collider(groundLayer,thorns,thornEnd,null,this)
+
+				this.physics.add.collider(wizard,thorns,thornHit,null,this)
+
+				this.physics.add.collider(wallLayer,wizard);
+
+				this.physics.add.overlap(wizard,hitboxtwo,aoeAttack,null,this)
+
+				this.physics.add.overlap(brambles,hitboxtwo,aoeAttack,null,this)
+
+				this.physics.add.overlap(brambles,bolts,boltHit,null,this)
+
+				this.physics.add.overlap(brambles,hitbox,touchAttack,null,this)
+
+				this.physics.add.overlap(orb,wizard,powerUp,null,this)
+
+				this.physics.add.overlap(gem,wizard,gameWin,null,this)
+
+
+				cursors = this.input.keyboard.addKeys({
+					up: Phaser.Input.Keyboard.KeyCodes.UP,
+          		    down: Phaser.Input.Keyboard.KeyCodes.DOWN,
+            		left: Phaser.Input.Keyboard.KeyCodes.LEFT,
+    		        right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
+            		space: Phaser.Input.Keyboard.KeyCodes.SPACE,
+     		        shift: Phaser.Input.Keyboard.KeyCodes.SHIFT,
+      				one: Phaser.Input.Keyboard.KeyCodes.ONE,
+         			two: Phaser.Input.Keyboard.KeyCodes.TWO,
+         		    three: Phaser.Input.Keyboard.KeyCodes.THREE,
+         		    four: Phaser.Input.Keyboard.KeyCodes.FOUR,
+         		    five: Phaser.Input.Keyboard.KeyCodes.FIVE,
+         		    six: Phaser.Input.Keyboard.KeyCodes.SIX,
+         		    seven: Phaser.Input.Keyboard.KeyCodes.SEVEN,
+         			eight: Phaser.Input.Keyboard.KeyCodes.EIGHT,
+         		    nine: Phaser.Input.Keyboard.KeyCodes.NINE,
+         		    zero: Phaser.Input.Keyboard.KeyCodes.ZERO,
+         		    m: Phaser.Input.Keyboard.KeyCodes.M
+				})
+			}
+
+			function update(){
+				if(wizard.inv == 0){
+					if (cursors.left.isDown){
+						wizard.setVelocityX(-160);
+						wizard.anims.play("left",true);
+						wizard.flipX = false;
+						wizard.direction = -1
+					}else if (cursors.right.isDown){
+						wizard.setVelocityX(200);
+						wizard.anims.play("left",true);
+						wizard.flipX = true;
+						wizard.direction = 1
+					} else{
+						wizard.setVelocityX(0)
+						wizard.anims.play("idle",true)
+					}
+				}
+				if(cursors.up.isDown && wizard.body.onFloor()){
+					
+					wizard.body.setVelocityY(-400);
+				}
+				if(!wizard.body.onFloor()){
+					wizard.anims.play("jump",true)
+				}
+				
+
+				if (wizard.fire>0){
+					if (wizard.fire%40 == 0){
+						wizard.health-=10
+						soundManager(damage,false)
+					}
+					wizard.fire-=1
+				}
+
+				if(wizard.color >0){
+					wizard.color -=1
+				} else if(wizard.fire >0){
+					wizard.setTint(0xFC7405)
+				} else{
+					wizard.clearTint()
+				}
+
+				for(i=0;i<skeletonsco.length;i++){
+					skeletons[i].anims.play("skeletonWalk",true)
+
+
+					if (skeletons[i].fire>0){
+						if (skeletons[i].fire%40 == 0){
+							skeletons[i].health-=10
+						}
+						skeletons[i].fire-=1
+					}
+
+					if(skeletons[i].color >0){
+						skeletons[i].color -=1
+					} else if(skeletons[i].fire >0){
+						skeletons[i].setTint(0xFC7405)
+					} else{
+						skeletons[i].clearTint()
+					}
+
+					if (skeletons[i].health <=0){
+						skeletons[i].destroy()
+						skeletons[i].gone = true
+					}
+					if(skeletons[i].gone == false){
+						if((skeletons[i].x<skeletonsco[i][2]&&skeletonsco[i][3]=='right')||skeletons[i].x<skeletonsco[i][0]){
+							skeletons[i].setVelocityX(75)
+							skeletons[i].flipX = false
+							skeletonsco[i][3]="right"
+						} else{
+							skeletons[i].setVelocityX(-75)
+							skeletons[i].flipX = true
+							skeletonsco[i][3]="left"
+
+						}
+					}
+				}
+
+				for(i=0;i<brambles.length;i++){
+					if(brambles[i].gone == false&&i>4){
+						if (brambles[i].body.onFloor()){
+							brambles[i].body.velocity.x = 0;
+							brambles[i].body.velocity.y = 0;
+						}
+					}
+					if (brambles[i].fire>0){
+						if (brambles[i].fire%40 == 0){
+							brambles[i].health-=10
+						}
+						brambles[i].fire-=1
+					}
+
+					if(brambles[i].color >0){
+						brambles[i].color -=1
+					} else if(brambles[i].fire >0){
+						brambles[i].setTint(0xFC7405)
+					} else{
+						brambles[i].clearTint()
+					}
+
+					if (brambles[i].health <=0){
+						brambles[i].destroy()
+						brambles[i].gone = true
+					}
+
+					if (brambles[i].timer <= 0&&brambles[i].gone == false&&wizard.x-brambles[i].x > -500){
+						brambles[i].anims.play("brambleShoot",true)
+						brambles[i].timer = 100
+						var thorn = thorns.create(brambles[i].x,brambles[i].y-30,'thorn');
+
+						this.physics.moveTo(thorn, wizard.x, wizard.y, null, 3*(Math.sqrt(Math.pow(brambles[i].x-wizard.x,2)+Math.pow(brambles[i].y-wizard.y,2))));
+						thorn.angle = toDegrees(Math.atan(thorn.body.velocity.y/thorn.body.velocity.x));
+						thorn.checkWorldBounds = true;
+   						thorn.outOfBoundsKill = true;
+   						thorn.body.allowGravity=false;
+   						if(thorn.body.velocity.x >0){
+							thorn.flipX = true;
+						}
+					} else{
+						brambles[i].timer -= 1
+					}
+				}
+
+				if (tree.fire>0){
+					if (tree.fire%40 == 0){
+						tree.health-=10
+					}
+					tree.fire-=1
+				}
+
+				if(tree.color >0){
+					tree.color -=1
+				} else if(tree.fire >0){
+					tree.setTint(0xFC7405)
+				} else{
+					tree.clearTint()
+				}
+
+				if (tree.health <=0){
+					tree.destroy()
+					tree.gone = true
+				}
+
+				if (tree.timer <= 0&&tree.gone == false&&wizard.x-tree.x > -1900){
+					tree.rand = Math.random()
+					if(tree.rand < 0.05){
+						tree.timer = 100
+						brambles[brambles.length] = this.physics.add.sprite(tree.x,tree.y, 'bramble').setScale(2);
+						brambles[brambles.length-1].setVelocity(Math.random()*-400+100,Math.random()*-400+100,)
+						brambles[brambles.length-1].setCollideWorldBounds(true);
+						brambles[brambles.length-1].health =  50
+						brambles[brambles.length-1].maxHealth = 50
+						brambles[brambles.length-1].timer = Math.floor(100*Math.random())+1
+						brambles[brambles.length-1].gone = false
+						this.physics.add.collider(groundLayer, brambles[brambles.length-1]);
+
+						this.physics.add.overlap(brambles[brambles.length-1],bolts,boltHit,null,this)
+
+						this.physics.add.overlap(brambles[brambles.length-1],wizard,touchEnemy,null,this)
+
+						this.physics.add.overlap(brambles[brambles.length-1],hitbox,touchAttack,null,this)
+
+						this.physics.add.overlap(brambles[brambles.length-1],hitboxtwo,aoeAttack,null,this)
+					}else if(tree.rand < 0.1){
+						tree.timer = 100
+						/*for(i=0;i+=20;i<=80){
+							var thorn = thorns.create(tree.x,tree.y+i,'thorn');
+							thorn.setVelocityX(-400)
+							thorn.checkWorldBounds = true;
+							thorn.outOfBoundsKill = true;
+							thorn.body.allowGravity=false;
+						}*/
+					}else{
+						tree.timer = 30
+						var thorn = thorns.create(tree.x,tree.y+40,'thorn');
+
+						this.physics.moveTo(thorn, wizard.x, wizard.y, null, 3*(Math.sqrt(Math.pow(tree.x-wizard.x,2)+Math.pow(tree.y-wizard.y,2))));
+						thorn.angle = toDegrees(Math.atan(thorn.body.velocity.y/thorn.body.velocity.x));
+						thorn.checkWorldBounds = true;
+						thorn.outOfBoundsKill = true;
+						thorn.body.allowGravity=false;
+						if(thorn.body.velocity.x >0){
+							thorn.flipX = true;
+						}
+					}
+				} else{
+					tree.timer -= 1
+				}
+
+				if(cursors.one.isDown){
+					if (clicked == false){
+						spell[10] = 0
+						cast()
+						clicked = true
+					}
+				}
+
+				if(cursors.two.isDown){
+					if (clicked == false){
+						spell[10] = 1
+						cast()
+						clicked = true
+					}
+				}
+				
+				if(cursors.three.isDown){
+					if (clicked == false){
+						spell[10] = 2
+						cast()
+						clicked = true
+					}
+				}
+				
+				if(cursors.four.isDown){
+					if (clicked == false){
+						spell[10] = 3
+						cast()
+						clicked = true
+					}
+				}
+				
+				if(cursors.five.isDown){
+					if (clicked == false){
+						spell[10] = 4
+						cast()
+						clicked = true
+					}
+				}
+				
+				if(cursors.six.isDown){
+					if (clicked == false){
+						spell[10] = 5
+						cast()
+						clicked = true
+					}
+				}
+				
+				if(cursors.seven.isDown){
+					if (clicked == false){
+						spell[10] = 6
+						cast()
+						clicked = true
+					}
+				}
+				
+				if(cursors.eight.isDown){
+					if (clicked == false){
+						spell[10] = 7
+						cast()
+						clicked = true
+					}
+				}
+				
+				if(cursors.nine.isDown){
+					if (clicked == false){
+						spell[10] = 8
+						cast()
+						clicked = true
+					}
+				}
+				
+				if(cursors.zero.isDown){
+					if (clicked == false){
+						spell[10] = 9
+						cast()
+						clicked = true
+					}
+				}
+
+				if(cursors.m.isDown&&release==true){
+					if (magicScreen==false){
+						this.physics.pause()
+						//back = this.add.image(0,0,'black');
+						//back.setScrollFactor(0);
+						magicScreen = true
+						number1.x = 75
+						number1.y = 500
+						number1.depth = 100
+						number2.x = 145
+						number2.y = 500
+						number2.depth = 100
+						number3.x = 215
+						number3.y = 500
+						number3.depth = 100
+						number4.x = 285
+						number4.y = 500
+						number4.depth = 100
+						number5.x = 355
+						number5.y = 500
+						number5.depth = 100
+						number6.x = 425
+						number6.y = 500
+						number6.depth = 100
+						number7.x = 495
+						number7.y = 500
+						number7.depth = 100
+						number8.x = 565
+						number8.y = 500
+						number8.depth = 100
+						number9.x = 635
+						number9.y = 500
+						number9.depth = 100
+						number10.x = 705
+						number10.y = 500
+						number10.depth = 100
+
+						boltButton.x = 100
+						boltButton.y = 400
+						boltButton.depth = 100
+
+						handButton.x = 100
+						handButton.y = 250
+						handButton.depth = 100
+
+						selfButton.x = 100
+						selfButton.y = 100
+						selfButton.depth = 100
+
+						singleButton.x = 400
+						singleButton.y = 200
+						singleButton.depth = 100
+
+						aoeButton.x = 400
+						aoeButton.y = 400
+						aoeButton.depth = 100
+
+						damageButton.x = 650
+						damageButton.y = 100
+						damageButton.depth = 100
+
+						flameButton.x = 650
+						flameButton.y = 250
+						flameButton.depth = 100
+
+						healthButton.x = 650
+						healthButton.y = 400
+						healthButton.depth = 100
+
+						clearAll()
+
+						set()
+
+					} else{
+						magicScreen = false
+						number1.x = 100
+						number1.y = -500
+						number2.x = 100
+						number2.y = -500
+						number3.x = 100
+						number3.y = -500
+						number4.x = 100
+						number4.y = -500
+						number5.x = 100
+						number5.y = -500
+						number6.x = 100
+						number6.y = -500
+						number7.x = 100
+						number7.y = -500
+						number8.x = 100
+						number8.y = -500
+						number9.x = 100
+						number9.y = -500
+						number10.x = 100
+						number10.y = -500
+						boltButton.x = 100
+						boltButton.y = -500
+						handButton.x = 100
+						handButton.y = -500
+						selfButton.x = 100
+						selfButton.y = -500
+						singleButton.x = 100
+						singleButton.y = -500
+						aoeButton.x = 100
+						aoeButton.y = -500
+						damageButton.x = 100
+						damageButton.y = -500
+						flameButton.x = 100
+						flameButton.y = -500
+						healthButton.x = 100
+						healthButton.y = -500
+						//back.destroy()
+						this.physics.resume()
+					}
+					release = false
+				} 
+
+				if(!cursors.m.isDown){
+					release = true
+				}
+
+				if(cursors.one.isUp&&cursors.two.isUp&&cursors.three.isUp&&cursors.four.isUp&&cursors.five.isUp&&cursors.six.isUp&&cursors.seven.isUp&&cursors.eight.isUp&&cursors.nine.isUp&&cursors.zero.isUp){
+					clicked = false
+				}
+
+				htext.setText("Health: "+wizard.health);
+				mtext.setText("Mana: "+Math.floor(wizard.mana));
+
+				wizard.mana = Math.min(wizard.mana+.25,wizard.maxMana)
+
+				if(wizard.attacking == 10 ){
+					wizard.anims.play("attack",true)
+					hitbox.x = wizard.x +(30*wizard.direction)
+					hitbox.y = wizard.y
+					wizard.attacking -= 1
+				} else if (wizard.attacking > 0){
+					wizard.anims.play("attack",true)
+					hitbox.x=0
+					hitbox.y = 0
+					wizard.attacking -= 1
+				}
+
+				if (wizard.inv>1){
+					wizard.inv-=1
+				} else if(wizard.inv = 1){
+					wizard.inv-=1
+				}
+				if (fireballOut == false){
+					hitboxtwo.x = 0
+					hitboxtwo.y = -200
+				} else {
+					fireballOut = false
+				}
+
+				if (wizard.x > 5500&&wall == false){
+					wallLayer.setCollisionByExclusion([-1]);
+					wall = true
+					soundManager(incantation,false)
+					soundManager(bossFight,true)
+					incantation.volume = 3
+					music.pause()
+				}
+
+				if(wizard.health <= 0&& wizard.dead== false){
+					this.physics.pause()
+					back = this.add.image(0,0,'black');
+					back.setScrollFactor(0);
+					text = this.add.text(150, 250, 'YOU DIED', {
+						font: '100px Optimus Princeps',
+						color: '#7e1615'
+					});
+					text.setScrollFactor(0)
+					music.pause()
+					incantation.pause()
+					bossFight.pause()
+					wizard.dead = true
+				}
+				
+			}
+
+			function cast(obj){
+				if (spell[spell[10]][0]==1){
+					spell[spell[10]][3] = 1
+				} else if (spell[spell[10]][0]==2){
+					spell[spell[10]][3] = 1
+				} else if (spell[spell[10]][0]==3){
+					spell[spell[10]][3] = 2
+				} 
+
+				if (spell[spell[10]][1]==1){
+					spell[spell[10]][3] *=1
+				} else if (spell[spell[10]][1]==2){
+					spell[spell[10]][3] *= 2
+				} else if (spell[spell[10]][1]==3){
+					spell[spell[10]][3] *= 2
+				} 
+
+				if (spell[spell[10]][2]==1){
+					spell[spell[10]][3] *=10
+				} else if (spell[spell[10]][2]==2){
+					spell[spell[10]][3] *= 15
+				} else if (spell[spell[10]][2]==3){
+					spell[spell[10]][3] *= 25
+				} 
+				if(wizard.mana -(spell[spell[10]][3])>=0){
+
+					wizard.mana -= spell[spell[10]][3]
+
+
+					if (spell[spell[10]][0]==1){
+						self()
+					}else if(spell[spell[10]][0]==2){
+						touch()
+					}else{
+						boltShot()
+					}
+				}
+			}
+
+			function self(){
+				soundManager(spellSound,false)
+				spell[spell[10]][3]*=2
+				if (spell[spell[10]][1]==1){
+					single(wizard)
+				}else if(spell[spell[10]][1]==2){
+					aoe(wizard)
+				}else{
+					chain(wizard)
+				}
+			}
+
+			function touch(){
+				soundManager(swoosh, false)
+				wizard.attacking = 10
+			}
+
+			function boltShot(){
+				soundManager(fireball,false)
+
+				var bolt = bolts.create(wizard.x+ 15*wizard.direction,wizard.y,'bolt').setScale(.5)
+
+				bolt.setVelocity(400*wizard.direction,0)
+
+				bolt.checkWorldBounds = true;
+   				bolt.outOfBoundsKill = true;
+
+				if(wizard.direction <0){
+					bolt.flipX = true;
+				}
+
+				if (spell[spell[10]][2]==2){
+					bolt.setTint(0xff0000)
+				}else if(spell[spell[10]][2]==3){
+					bolt.setTint(0x90ee90)
+				}
+
+				bolt.body.allowGravity=false
+			}
+
+			function single(target){
+				if (spell[spell[10]][2]==1){
+					force(target)
+				}else if(spell[spell[10]][2]==2){
+					fire(target)
+				}else{
+					heal(target)
+				}
+			}
+
+			function aoe(target){
+				var fireball = fireballs.create(target.x,target.y,'fireball').setScale(2)
+				soundManager(explosion,false)
+
+				fireball.body.allowGravity=false
+				if (spell[spell[10]][2]==1){
+					fireball.setTint(0x00FFFF)
+				}else if(spell[spell[10]][2]==3){
+					fireball.setTint(0x228B22)
+				}
+				fireball.anims.play("explosion",true)
+				hitboxtwo.x = target.x-90
+				hitboxtwo.y = target.y-90
+				fireballOut = true
+			}
+
+			function chain(){}
+
+			function force(target){
+				target.setTint(0x00FFFF)
+				target.color = 10
+				if(!(target == wizard&&spell[spell[10]][0]==1&&spell[spell[10]][1]==2)){
+					target.health-=20
+					if (target == wizard){
+						soundManager(damage,false)
+					}
+				}
+			}
+
+			function fire(target){
+				if(!(target == wizard&&spell[spell[10]][0]==1&&spell[spell[10]][1]==2)){
+					target.fire = 200
+				}
+				target.setTint(0xFC7405)
+			}
+
+			function heal(target){
+				target.health = Math.min(target.health + 10,target.maxHealth)
+				target.setTint(0x90ee90)
+				target.color = 10
+				target.fire = 0
+				
+			}
+
+			function boltEnd(sbolt,layer){
+				if (spell[spell[10]][1]==2){
+					aoe(sbolt)
+				}
+				sbolt.destroy()
+			}
+
+			function thornEnd(thorn,layer){
+				thorn.destroy()
+			}
+
+			function boltHit(target,sbolt){
+				sbolt.destroy()
+				if (spell[spell[10]][1]==1){
+					single(target)
+				}else if(spell[spell[10]][1]==2){
+					aoe(target)
+				}else{
+					chain(target)
+				}
+			}
+
+			function touchEnemy(target,player){
+				if (wizard.inv == 0){
+					wizard.health -= 20
+					soundManager(damage,false)
+					wizard.setVelocityY(-200)
+					if (wizard.x >target.x){
+						wizard.setVelocityX(200)
+						wizard.inv = 20
+					} else{
+						wizard.setVelocityX(-200)
+						wizard.inv = 20
+					}
+				}
+			}
+
+			function touchAttack(target,hitboxs){
+				if(wizard.attacking>0){
+					if (spell[spell[10]][1]==1){
+						single(target)
+					}else if(spell[spell[10]][1]==2){
+						aoe(target)
+					}else{
+						chain(target)
+					}
+				}
+			}
+
+			function aoeAttack(target,hitboxs){
+				if (spell[spell[10]][2]==1){
+					force(target)
+				}else if(spell[spell[10]][2]==2){
+					fire(target)
+				}else{
+					heal(target)
+				}
+			}
+
+			function clickTwo(){
+				spell[10] = 1
+				clearAll()
+				set()
+			}
+
+			function clickThree(){
+				spell[10] = 2
+				clearAll()
+				set()
+			}
+
+			function clickFour(){
+				spell[10] = 3
+				clearAll()
+				set()
+			}
+
+			function clickFive(){
+				spell[10] = 4
+				clearAll()
+				set()
+			}
+
+			function clickSix(){
+				spell[10] = 5
+				clearAll()
+				number6.setTint(0xff0000)
+				set()
+			}
+
+			function clickSeven(){
+				spell[10] = 6
+				clearAll()
+				set()
+			}
+
+			function clickEight(){
+				spell[10] = 7
+				clearAll()
+				set()
+			}
+
+			function clickNine(){
+				spell[10] = 8
+				clearAll()
+				set()
+			}
+
+			function clickTen(){
+				spell[10] = 9
+				clearAll()
+				set()
+			}
+
+			function clickOne(){
+				spell[10] = 0
+				clearAll()
+				set()
+			}
+
+			function clickBolt(){
+				spell[spell[10]][0]=3
+				clearAll()
+				set()
+			}
+
+			function clickHand(){
+				spell[spell[10]][0]=2
+				clearAll()
+				set()
+			}
+
+			function clickSelf(){
+				spell[spell[10]][0]=1
+				clearAll()
+				set()
+			}
+
+			function clickSingle(){
+				spell[spell[10]][1]=1
+				clearAll()
+				set()
+			}
+
+			function clickAoe(){
+				spell[spell[10]][1]=2
+				clearAll()
+				set()
+			}
+
+			function clickDamage(){
+				spell[spell[10]][2]=1
+				clearAll()
+				set()
+			}
+
+			function clickFlame(){
+				spell[spell[10]][2]=2
+				clearAll()
+				set()
+			}
+
+			function clickHealth(){
+				spell[spell[10]][2]=3
+				clearAll()
+				set()
+			}
+
+			function clearAll(){
+				number1.clearTint()
+				number2.clearTint()
+				number3.clearTint()
+				number4.clearTint()
+				number5.clearTint()
+				number6.clearTint()
+				number7.clearTint()
+				number8.clearTint()
+				number9.clearTint()
+				number10.clearTint()
+				selfButton.clearTint()
+				handButton.clearTint()
+				boltButton.clearTint()
+				singleButton.clearTint()
+				aoeButton.clearTint()
+				damageButton.clearTint()
+				healthButton.clearTint()
+				flameButton.clearTint()
+
+			}
+
+			function set(){
+				if(spell[10]==0){
+					number1.setTint(0xff0000)
+				}else if(spell[10]==1){
+					number2.setTint(0xff0000)
+				}else if(spell[10]==2){
+					number3.setTint(0xff0000)
+				}else if(spell[10]==3){
+					number4.setTint(0xff0000)
+				}else if(spell[10]==4){
+					number5.setTint(0xff0000)
+				}else if(spell[10]==5){
+					number6.setTint(0xff0000)
+				}else if(spell[10]==6){
+					number7.setTint(0xff0000)
+				}else if(spell[10]==7){
+					number8.setTint(0xff0000)
+				}else if(spell[10]==8){
+					number9.setTint(0xff0000)
+				}else if(spell[10]==9){
+					number10.setTint(0xff0000)
+				}
+
+				if(spell[spell[10]][0]==1){
+					selfButton.setTint(0xff0000)
+				} else if(spell[spell[10]][0]==2){
+					handButton.setTint(0xff0000)
+				} else if(spell[spell[10]][0]==3){
+					boltButton.setTint(0xff0000)
+				} 
+
+				if(spell[spell[10]][1]==1){
+					singleButton.setTint(0xff0000)
+				} else if(spell[spell[10]][1]==2){
+					aoeButton.setTint(0xff0000)
+				}
+
+				if(spell[spell[10]][2]==1){
+					damageButton.setTint(0xff0000)
+				} else if(spell[spell[10]][2]==2){
+					flameButton.setTint(0xff0000)
+				} else if(spell[spell[10]][2]==3){
+					healthButton.setTint(0xff0000)
+				} 
+			}
+
+			function powerUp(){
+				wizard.maxHealth = 150
+				wizard.maxMana = 150
+				wizard.health = 150
+				orb.destroy()
+			}
+
+			function toDegrees (angle) {
+  				return angle * (180 / Math.PI);
+			}
+
+			function thornHit(player,thorn){
+				player.health -= 10
+				soundManager(damage,false)
+				thorn.destroy()
+			}
+
+			function gameWin(){
+				gem.destroy()
+				this.physics.pause()
+				this.physics.pause()
+				back = this.add.image(0,0,'black');
+				back.setScrollFactor(0);
+				text = this.add.text(150, 250, 'YOU WIN', {
+					font: '100px Optimus Princeps',
+					color: '#FFD700'
+				});
+				text.setScrollFactor(0)
+				music.pause()
+				incantation.pause()
+				bossFight.pause()
+		//		soundManager(wow,true)
+			}
+
+			function soundManager( clip ,value){					
+    			clip.play({loop: value});
+			}
+		</script>
+	</body>
+</html>
